@@ -123,7 +123,8 @@ async def delete_base_question(question_id: str) -> bool:
 
 async def create_variant(
     variant_data: QuestionVariantCreate,
-    is_ai_generated: bool = False
+    is_ai_generated: bool = False,
+    auto_approve: bool = False
 ) -> QuestionVariantResponse:
     """Create a question variant."""
     db = get_database()
@@ -138,13 +139,16 @@ async def create_variant(
             detail="Base question not found"
         )
     
+    # Auto-approve if not AI-generated OR if explicitly requested
+    approved = (not is_ai_generated) or auto_approve
+    
     variant_doc = {
         "question_id": variant_data.question_id,
         "question_text": variant_data.question_text,
         "options": variant_data.options,
         "correct_answer": variant_data.options[variant_data.correct_index],
         "correct_index": variant_data.correct_index,
-        "approved": not is_ai_generated,  # Manual variants are auto-approved
+        "approved": approved,
         "is_ai_generated": is_ai_generated,
         "created_at": datetime.utcnow()
     }

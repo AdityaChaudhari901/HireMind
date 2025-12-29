@@ -182,12 +182,13 @@ async def generate_ai_questions(
         from app.schemas import QuestionVariantCreate
         await create_variant(
             QuestionVariantCreate(
-                question_id=base_q["id"],
+                question_id=base_q.id,
                 question_text=q["question_text"],
                 options=q["options"],
                 correct_index=q["correct_index"]
             ),
-            is_ai_generated=True
+            is_ai_generated=True,
+            auto_approve=True  # Auto-approve for immediate use
         )
         
         saved_questions.append(base_q)

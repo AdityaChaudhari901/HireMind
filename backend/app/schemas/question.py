@@ -66,7 +66,7 @@ class GenerateQuestionsRequest(BaseModel):
     """Schema for AI question generation from topic."""
     topic: str = Field(..., min_length=1, max_length=100)
     difficulty: DifficultyLevel = DifficultyLevel.MEDIUM
-    num_questions: int = Field(default=10, ge=1, le=20)
+    num_questions: int = Field(default=10, ge=1, le=100)
     description: Optional[str] = Field(default=None, max_length=500)
 
 

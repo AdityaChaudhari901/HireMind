@@ -1,16 +1,18 @@
 import json
+from json_repair import repair_json
 import re
 from typing import List, Optional
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.config import settings
 from app.schemas import QuestionVariantCreate
 
 
-# Configure Gemini
-def configure_gemini():
-    """Configure the Gemini API client."""
-    if settings.GEMINI_API_KEY:
-        genai.configure(api_key=settings.GEMINI_API_KEY)
+def get_client():
+    """Get the Gemini client."""
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("Gemini API key not configured")
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 async def generate_question_variants(
@@ -33,12 +35,7 @@ async def generate_question_variants(
     Returns:
         List of QuestionVariantCreate objects ready to be saved
     """
-    configure_gemini()
-    
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("Gemini API key not configured")
-    
-    model = genai.GenerativeModel('gemini-pro')
+    client = get_client()
     
     prompt = f"""You are an expert test question writer. Generate {num_variants} different paraphrased versions of the following multiple choice question.
 
@@ -74,7 +71,10 @@ OUTPUT FORMAT (JSON array):
 Generate exactly {num_variants} variants. Output ONLY the JSON array, no other text."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt
+        )
         response_text = response.text.strip()
         
         # Clean up response - extract JSON
@@ -98,7 +98,6 @@ Generate exactly {num_variants} variants. Output ONLY the JSON array, no other t
         return result[:num_variants]
         
     except json.JSONDecodeError as e:
-        # Fallback: Try to parse manually if JSON is malformed
         raise ValueError(f"Failed to parse Gemini response as JSON: {str(e)}")
     except Exception as e:
         raise ValueError(f"Failed to generate variants: {str(e)}")
@@ -114,12 +113,10 @@ async def validate_variant_quality(
     Returns:
         dict with 'is_valid', 'score', and 'feedback'
     """
-    configure_gemini()
-    
     if not settings.GEMINI_API_KEY:
         return {"is_valid": True, "score": 0.8, "feedback": "AI validation skipped - no API key"}
     
-    model = genai.GenerativeModel('gemini-pro')
+    client = get_client()
     
     prompt = f"""Compare these two questions and evaluate if the variant maintains the same meaning and difficulty:
 
@@ -137,7 +134,10 @@ Output JSON: {{"is_valid": true/false, "score": 0.0-1.0, "feedback": "brief feed
 Only output the JSON, nothing else."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt
+        )
         response_text = response.text.strip()
         
         # Clean up response
@@ -162,18 +162,13 @@ async def generate_questions_from_topic(
     Args:
         topic: The topic/subject area (e.g., "JavaScript", "Python", "SQL")
         difficulty: Easy, Medium, or Hard
-        num_questions: Number of questions to generate (1-20)
+        num_questions: Number of questions to generate (1-100)
         description: Optional description or focus area
     
     Returns:
         List of question dictionaries ready to be saved
     """
-    configure_gemini()
-    
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("Gemini API key not configured. Please add GEMINI_API_KEY to your .env file.")
-    
-    model = genai.GenerativeModel('gemini-pro')
+    client = get_client()
     
     focus = f" Focus on: {description}" if description else ""
     
@@ -207,7 +202,13 @@ OUTPUT FORMAT (JSON array):
 Generate exactly {num_questions} questions. Output ONLY the valid JSON array, no markdown, no explanation."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type='application/json'
+            )
+        )
         response_text = response.text.strip()
         
         # Clean up response - extract JSON array
@@ -215,10 +216,9 @@ Generate exactly {num_questions} questions. Output ONLY the valid JSON array, no
         if json_match:
             response_text = json_match.group()
         
-        # Fix common JSON issues
-        response_text = response_text.replace("'", '"')
-        
-        questions_data = json.loads(response_text)
+        # Use json_repair to fix any malformed JSON from AI
+        repaired_json = repair_json(response_text)
+        questions_data = json.loads(repaired_json)
         
         result = []
         for q in questions_data:
