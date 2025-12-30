@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     QUESTION_TIMER_SECONDS: int = 10
     
     # CORS
-    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,https://hire-mind-topaz.vercel.app"
     
     @property
     def cors_origins_list(self) -> List[str]:
