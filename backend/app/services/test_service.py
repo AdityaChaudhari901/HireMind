@@ -20,9 +20,11 @@ from app.config import settings
 async def create_test_link(
     request: CreateTestLinkRequest,
     created_by: str,
-    base_url: str = "http://localhost:5173"
+    base_url: str = None
 ) -> TestLinkResponse:
     """Create a unique test link for candidates."""
+    if base_url is None:
+        base_url = settings.FRONTEND_URL
     db = get_database()
     
     link_id = generate_unique_id(prefix="test-")
@@ -484,7 +486,7 @@ async def get_test_links(
             total_questions=link["total_questions"],
             time_per_question=link["time_per_question"],
             topics=link.get("topics", []),
-            full_url=f"http://localhost:5173/test/{link['link_id']}",
+            full_url=f"{settings.FRONTEND_URL}/test/{link['link_id']}",
             expires_at=link.get("expires_at"),
             is_used=link.get("is_used", False),
             max_uses=link.get("max_uses", 0),
