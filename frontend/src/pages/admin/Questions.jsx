@@ -174,7 +174,7 @@ export default function Questions() {
                                         label="Number of Questions"
                                         type="number"
                                         min="1"
-                                        max="20"
+                                        max="100"
                                         value={aiForm.num_questions}
                                         onChange={(e) => setAiForm({ ...aiForm, num_questions: parseInt(e.target.value) })}
                                     />
