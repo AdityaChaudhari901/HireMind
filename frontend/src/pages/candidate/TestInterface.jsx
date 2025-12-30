@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { testAPI } from '../../services/api';
 import { useTimer, useAntiCheat } from '../../hooks/useTimer';
 import { Card, CardBody, Button, Loading } from '../../components/common';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Clock } from 'lucide-react';
 
 export default function TestInterface() {
     const { linkId } = useParams();
@@ -15,11 +15,63 @@ export default function TestInterface() {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState('');
 
+    // Total test timer state
+    const [totalTimeLeft, setTotalTimeLeft] = useState(null);
+    const totalTimerRef = useRef(null);
+
     const sessionId = sessionStorage.getItem('testSessionId');
     const testConfig = JSON.parse(sessionStorage.getItem('testConfig') || '{}');
     const timePerQuestion = testConfig.timePerQuestion || 10;
+    const totalQuestions = testConfig.totalQuestions || 60;
+    const totalTestTime = totalQuestions * timePerQuestion; // Total seconds for entire test
 
-    // Auto-submit when timer expires
+    // Initialize total timer on first load
+    useEffect(() => {
+        if (totalTimeLeft === null) {
+            const savedTime = sessionStorage.getItem('totalTimeLeft');
+            setTotalTimeLeft(savedTime ? parseInt(savedTime) : totalTestTime);
+        }
+    }, [totalTestTime]);
+
+    // Total test timer countdown
+    useEffect(() => {
+        if (totalTimeLeft === null || totalTimeLeft <= 0) return;
+
+        totalTimerRef.current = setInterval(() => {
+            setTotalTimeLeft(prev => {
+                const newTime = prev - 1;
+                sessionStorage.setItem('totalTimeLeft', newTime.toString());
+                if (newTime <= 0) {
+                    clearInterval(totalTimerRef.current);
+                    // Auto-submit test when total time expires
+                    handleAutoSubmitTest();
+                }
+                return newTime;
+            });
+        }, 1000);
+
+        return () => clearInterval(totalTimerRef.current);
+    }, [totalTimeLeft !== null]);
+
+    // Auto-submit entire test when time runs out
+    const handleAutoSubmitTest = async () => {
+        try {
+            await testAPI.submitAnswer(sessionId, selectedIndex);
+            navigate(`/test/${linkId}/complete`);
+        } catch (e) {
+            navigate(`/test/${linkId}/complete`);
+        }
+    };
+
+    // Format total time as MM:SS
+    const formatTime = (seconds) => {
+        if (!seconds || seconds < 0) return '00:00';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Auto-submit when per-question timer expires
     const handleTimeExpire = useCallback(() => {
         if (!submitting) {
             handleSubmit(true);
@@ -114,8 +166,20 @@ export default function TestInterface() {
 
     return (
         <div className="min-h-screen bg-slate-100 no-select">
-            {/* Header with Timer */}
-            <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+            {/* Total Test Timer - Fixed at top */}
+            <div className={`sticky top-0 z-20 py-2 px-4 text-center ${totalTimeLeft <= 60 ? 'bg-danger-500' :
+                    totalTimeLeft <= 120 ? 'bg-warning-500' : 'bg-primary-600'
+                }`}>
+                <div className="flex items-center justify-center space-x-2">
+                    <Clock className="w-5 h-5 text-white" />
+                    <span className="text-white font-bold text-lg">
+                        Time Remaining: {formatTime(totalTimeLeft)}
+                    </span>
+                </div>
+            </div>
+
+            {/* Header with Question Timer */}
+            <header className="bg-white border-b border-slate-200 sticky top-10 z-10">
                 <div className="max-w-4xl mx-auto px-4 py-3">
                     <div className="flex items-center justify-between">
                         <div>
@@ -125,10 +189,11 @@ export default function TestInterface() {
                             </span>
                         </div>
 
-                        {/* Timer */}
+                        {/* Per-Question Timer */}
                         <div className="flex items-center space-x-3">
+                            <span className="text-sm text-slate-500">Question Timer:</span>
                             <div className={`text-2xl font-bold ${timeLeft <= 3 ? 'text-danger-500 animate-pulse' :
-                                    timeLeft <= 5 ? 'text-warning-500' : 'text-primary-600'
+                                timeLeft <= 5 ? 'text-warning-500' : 'text-primary-600'
                                 }`}>
                                 {timeLeft}s
                             </div>
@@ -139,7 +204,7 @@ export default function TestInterface() {
                     <div className="mt-2 h-2 bg-slate-200 rounded-full overflow-hidden">
                         <div
                             className={`h-full transition-all duration-200 ${percentage <= 30 ? 'bg-danger-500' :
-                                    percentage <= 50 ? 'bg-warning-500' : 'bg-success-500'
+                                percentage <= 50 ? 'bg-warning-500' : 'bg-success-500'
                                 }`}
                             style={{ width: `${percentage}%` }}
                         />
@@ -169,8 +234,8 @@ export default function TestInterface() {
                                 >
                                     <div className="flex items-center">
                                         <span className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-semibold ${selectedIndex === index
-                                                ? 'bg-primary-500 text-white'
-                                                : 'bg-slate-100 text-slate-600'
+                                            ? 'bg-primary-500 text-white'
+                                            : 'bg-slate-100 text-slate-600'
                                             }`}>
                                             {String.fromCharCode(65 + index)}
                                         </span>
@@ -203,8 +268,8 @@ export default function TestInterface() {
                         <div
                             key={i}
                             className={`w-2 h-2 rounded-full ${i < (question?.question_number || 0) - 1 ? 'bg-primary-500' :
-                                    i === (question?.question_number || 0) - 1 ? 'bg-primary-400 animate-pulse' :
-                                        'bg-slate-300'
+                                i === (question?.question_number || 0) - 1 ? 'bg-primary-400 animate-pulse' :
+                                    'bg-slate-300'
                                 }`}
                         />
                     ))}
