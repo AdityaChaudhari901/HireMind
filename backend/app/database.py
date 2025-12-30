@@ -55,7 +55,7 @@ async def create_indexes():
     # Test sessions collection
     await db.test_sessions.create_indexes([
         IndexModel([("user_id", ASCENDING)]),
-        IndexModel([("test_link_id", ASCENDING)], unique=True),
+        IndexModel([("test_link_id", ASCENDING)]),  # Removed unique=True to allow multiple users
         IndexModel([("completed", ASCENDING)]),
         IndexModel([("started_at", ASCENDING)])
     ])
